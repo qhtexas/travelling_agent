@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError, validate_call
 from playwright.sync_api import sync_playwright
-from tools import xhs_scraper
+from tools import XhsScraper
+from schemas import XhsSearchInput, XhsSearchNoteResult
 load_dotenv()
 
 
@@ -17,9 +18,19 @@ client = OpenAI(
 
 
 
-def search_xhs(keyword:str) -> list:
-    results = xhs_scraper(keyword)
-    return "\n".join(results)
+def search_xhs(data: str) -> list:
+    try:
+        input_data = XhsSearchInput.model_validate_json(data)
+    except ValidationError as e:
+        print(f"输入数据类型错误失败: {e}")
+        return []
+
+    scraper = XhsScraper()
+    return_list = scraper.xhs_note_text_scrape(input_data.keyword)
+    if return_list:
+        return XhsSearchNoteResult(status="success", data=return_list).model_dump_json()
+    else:
+        return XhsSearchNoteResult(status="error", data=[]).model_dump_json()
 
 
 
@@ -73,14 +84,14 @@ if response.choices[0].message.tool_calls:
         function_to_call = dispatcher.get(function_name)
 
         if function_to_call:
-            args = json.loads(tool_call.function.arguments)
-            function_response = function_to_call(**args)
+            args = tool_call.function.arguments
+            function_response = function_to_call(args)
         
         messages.append({
             "role": "tool",
             "tool_call_id": tool_call.id, # 对应那张“便签”的ID
             "name": function_name,
-            "content": function_response # 刚才查到的 "Beijing: ☀️ +25°C"
+            "content": function_response 
         })
 
         final_response = client.chat.completions.create(

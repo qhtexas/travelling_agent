@@ -1,1 +1,1 @@
-from .scrapers import xhs_scraper
+from .scrapers import XhsScraper
