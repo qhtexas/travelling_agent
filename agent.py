@@ -43,7 +43,7 @@ def search_xhs(data: str) -> list:
     if return_list:
         return XhsSearchNoteResult(status="success", data=return_list).model_dump_json()
     else:
-        return XhsSearchNoteResult(status="error", data=[]).model_dump_json()
+        return XhsSearchNoteResult(status="success", data=[]).model_dump_json()
 
 # 定义模型可调用的工具
 tool = [
@@ -51,17 +51,7 @@ tool = [
      "function":{
                     "name":"search_xhs",
                     "description":"根据关键词，返回小红书上前五条笔记内容",
-                    "parameters":{
-                            "type":"object",
-                            "properties":{
-                            "keyword":{
-                                "type":"string",
-                                "description":"要查询的关键词，例如：怀柔旅游攻略"
-                            }
-                    },
-                    "required":["keyword"],
-                    "additionalProperties": False
-                }
+                    "parameters":XhsSearchInput.model_json_schema(),
             }
         }
 ]
@@ -116,12 +106,12 @@ if response.choices[0].message.tool_calls:
         })
 
         # 再次调用模型，根据工具返回的结果生成最终回复
-        final_response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=messages,
-            stream = True,
-            tools=None
-        )
+    final_response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=messages,
+        stream = True,
+        tools=None        
+    )
     
     # 流式输出模型回复
     for chunk in final_response:

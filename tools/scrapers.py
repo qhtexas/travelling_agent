@@ -177,7 +177,7 @@ class XhsScraper(Scraper):
                 print(f"笔记Token: {token}")
                 params={"xsec_token": token,
                         "xsec_source": "pc_search",
-                        "source": "web_search_reslut_notes"
+                        "source": "web_explore_feed",
                         }
                 try:
                     # 获取笔记详情页内容
