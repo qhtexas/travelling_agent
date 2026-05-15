@@ -8,6 +8,15 @@ from pydantic import ValidationError, validate_call
 from playwright.sync_api import sync_playwright
 from tools import XhsScraper
 from schemas import XhsSearchInput, XhsSearchNoteResult
+from playwright_stealth import Stealth
+_global_Playwright = None
+_global_browser = None
+
+def ini() -> None:
+    global _global_browser, _global_Playwright
+    if _global_browser is None:
+        _global_Playwright = Stealth().use_sync(sync_playwright()).start()
+        _global_browser = _global_Playwright.chromium.launch(headless=False)
 
 # 加载环境变量
 load_dotenv()
@@ -34,16 +43,19 @@ def search_xhs(data: str) -> list:
     except ValidationError as e:
         print(f"输入数据类型错误失败: {e}")
         return []
-
+    ini()
     # 实例化爬虫并抓取笔记内容
-    scraper = XhsScraper()
-    return_list = scraper.xhs_note_text_scrape(input_data.keyword)
-    
-    # 根据抓取结果返回相应的 JSON 响应
-    if return_list:
-        return XhsSearchNoteResult(status="success", data=return_list).model_dump_json()
+    scraper = XhsScraper(browser=_global_browser,user_name="。")
+    try:
+        return_list = scraper.xhs_note_text_scrape(input_data.keyword)
+    except TimeoutError as e:
+        return XhsSearchNoteResult(status="error",data=["login timeout",f"err_msg:{e}"])
     else:
-        return XhsSearchNoteResult(status="success", data=[]).model_dump_json()
+        # 根据抓取结果返回相应的 JSON 响应
+        if return_list:
+            return XhsSearchNoteResult(status="success", data=return_list).model_dump_json()
+        else:
+            return XhsSearchNoteResult(status="error", data=[]).model_dump_json()
 
 # 定义模型可调用的工具
 tool = [
@@ -122,7 +134,8 @@ else:
     # 如果没有工具调用，直接输出模型内容
     print(response_message.content)
 
-
+_global_browser.close()
+_global_Playwright.stop()
 
 
 
