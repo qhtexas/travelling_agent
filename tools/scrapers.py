@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
-from playwright.sync_api import sync_playwright, Playwright, Page
+from playwright.sync_api import sync_playwright, Playwright, Page, Browser, BrowserContext
 import json
 import httpx
 from bs4 import BeautifulSoup
@@ -9,6 +9,9 @@ from pathlib import Path
 import time
 from playwright_stealth import Stealth
 import random
+
+from pytest_playwright.pytest_playwright import page
+from auth_helper import Tencent_auth
 
 
 
@@ -39,7 +42,10 @@ class Scraper():
         创建一个带有隐身模式的浏览器实例。
         """
         self._playwright_instance = Stealth().use_sync(sync_playwright()).start()
-        browser = self._playwright_instance.chromium.launch(headless=False)
+        browser = self._playwright_instance.chromium.launch(
+            headless=False,
+            executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        )
         return browser
 
     def close_browser(self):
@@ -49,7 +55,78 @@ class Scraper():
         if self._playwright_instance:
             self._playwright_instance.stop()
     
+
     
+@dataclass(kw_only=True)
+class MFWScraper(Scraper):
+    """
+    MFW 爬虫类，继承自 Scraper。
+    """
+    # 存储登录状态的文件路径
+    file_path: Path | None = field(init=False)
+    # Playwright 浏览器上下文
+    context: BrowserContext  = field(init=False)
+    # Playwright 页面对象
+    page: Page | None = field(init=False, default=None)
+    # browser
+    browser: Browser
+    # user_name
+    user_name: str | None = None
+
+    def __post_init__(self):
+        self.cookie_file_path()
+    
+    def error_explain(self,num: int)-> None:
+        if num == -1:
+                print("认证失败，可能需要手动登录")
+                self.page.wait_for_timeout(10000)  # 等待 10 秒钟，给用户时间手动登录
+        elif num == 1:
+                print("无需登录，直接进入了主页")
+        elif num == 0:
+                print("验证成功")
+        elif num == -2:
+                print("验证失败，尝试了多个位置但都未成功。")
+
+    def cookie_file_path(self):
+        par_dir = Path(__file__).resolve().parent
+        target_dir = par_dir.parent / "auth" / "playwright"
+        target_dir.mkdir(parents=True, exist_ok=True)            
+        self.file_path = target_dir / f"mfw_info.json_{self.user_name}" if self.user_name else None
+    
+
+    def mfw_create_and_login(self) -> None:
+            """
+            创建浏览器上下文并处理登录逻辑。
+            """
+            if self.file_path is None:
+                print("未指定认证文件路径，使用无状态浏览器登录")
+                self.context = self.browser.new_context()
+            elif self.file_path.exists():
+                print("找到认证文件，尝试使用存储状态登录")
+                self.context = self.browser.new_context(storage_state=self.file_path)
+            else:
+                print("未找到认证文件，使用无状态浏览器登录")
+                self.context = self.browser.new_context()
+            self.page = self.context.new_page()
+            self.page.goto("https://www.mafengwo.cn")
+            num = Tencent_auth(lambda: self.page.goto("https://www.mafengwo.cn/"), self.page)
+            self.error_explain(int(num))
+            print(self.page.title())
+            login_btn = self.page.locator("#_j_showlogin")
+            login_btn.wait_for(state="visible", timeout=10000)
+            print("点击登录按钮")
+            num = Tencent_auth(lambda: login_btn.click(), self.page)
+            self.error_explain(int(num))
+            self.page.locator("#login-box").get_by_text("密码登录").click()
+            self.page.get_by_placeholder("您的邮箱/手机号").fill("18954195687")
+            self.page.get_by_placeholder("您的密码").fill("Wyb070928")
+            self.page.locator(".login_agreement").click()
+            self.page.locator("._js_loginBtn").click()
+
+
+
+            
+        
         
 
 @dataclass(kw_only=True)    
@@ -60,11 +137,11 @@ class XhsScraper(Scraper):
     # 存储登录状态的文件路径
     file_path: Path | None = field(init=False)
     # Playwright 浏览器上下文
-    context: Any  = field(init=False)
+    context: BrowserContext  = field(init=False)
     # Playwright 页面对象
-    page: Any = field(init=False, default=None)
+    page: Page | None = field(init=False, default=None)
     # browser
-    browser: Any
+    browser: Browser
     # user_name
     user_name: str | None = None
 
@@ -118,6 +195,13 @@ class XhsScraper(Scraper):
                 print("未找到认证文件，使用无状态浏览器登录")
                 self.context = self.browser.new_context()
             self.page = self.context.new_page()
+            self.page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+    
+            
+    
+            Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh']});
+        """)
             self.page.goto("https://www.xiaohongshu.com/explore")
             print(self.page.title())
             # 检查是否需要手动登录
@@ -155,10 +239,7 @@ class XhsScraper(Scraper):
 
         # 确保浏览器已初始化且已登录
         if self.context is None or self.page is None:
-            try:
-                self.xhs_create_and_login()
-            except TimeoutError as e:
-                return [f"登录超时，msg:{e}"]
+            self.xhs_create_and_login()
 
         # 在搜索框输入关键词
         self.page.get_by_role("textbox", name="搜索小红书").click()
@@ -243,9 +324,16 @@ class XhsScraper(Scraper):
 
 if __name__ == "__main__":
     # 测试代码
-    play = Stealth().use_sync(sync_playwright()).start()
-    brow = play.chromium.launch(headless=False)
+    user_data_path = Path(__file__).parent / "user_data"
+    play = sync_playwright().start()
+    browser = play.chromium.connect_over_cdp("http://localhost:9222")
+    """
     scraper = XhsScraper(browser=brow)
     notes = scraper.xhs_note_text_scrape("怀柔旅游攻略")
     print(notes)
+    page = brow.new_context().new_page()
+    target = get_MFW_auth_location(lambda: page.goto("https://www.mfw.cn/"), page)
     scraper.close_browser()
+    """
+    scraper = MFWScraper(browser=browser)
+    scraper.mfw_create_and_login()
