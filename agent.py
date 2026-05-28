@@ -9,14 +9,18 @@ from playwright.sync_api import sync_playwright
 from tools import XhsScraper
 from schemas import XhsSearchInput, XhsSearchNoteResult
 from playwright_stealth import Stealth
+import jsonref
+from utils import generate_function_tool
 _global_Playwright = None
 _global_browser = None
 
+_tools = []
 def ini() -> None:
-    global _global_browser, _global_Playwright
+    global _global_browser, _global_Playwright, _tools
     if _global_browser is None:
         _global_Playwright = Stealth().use_sync(sync_playwright()).start()
         _global_browser = _global_Playwright.chromium.launch(headless=False)
+        
 
 # 加载环境变量
 load_dotenv()
@@ -26,6 +30,8 @@ client = OpenAI(
     base_url="https://api.deepseek.com",
     api_key=os.getenv("DEEPSEEK_API_KEY")
 )
+
+
 
 def search_xhs(data: str) -> list:
     """
@@ -59,14 +65,13 @@ def search_xhs(data: str) -> list:
 
 # 定义模型可调用的工具
 tool = [
-    {"type":"function",
-     "function":{
-                    "name":"search_xhs",
-                    "description":"根据关键词，返回小红书上前五条笔记内容",
-                    "parameters":XhsSearchInput.model_json_schema(),
-            }
-        }
-]
+    generate_function_tool(
+        name="search_xhs",
+        description="根据关键词，返回小红书上前五条笔记内容",
+        parameters=XhsSearchInput.model_json_schema()
+    ),
+    ]
+
 
 # 工具分发器，将工具名称映射到对应的函数
 dispatcher = {
@@ -136,6 +141,7 @@ else:
 
 _global_browser.close()
 _global_Playwright.stop()
+
 
 
 

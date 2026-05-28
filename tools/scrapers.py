@@ -11,7 +11,7 @@ from playwright_stealth import Stealth
 import random
 
 from pytest_playwright.pytest_playwright import page
-from auth_helper import Tencent_auth
+#from auth_helper import Tencent_auth
 
 
 
@@ -56,12 +56,12 @@ class Scraper():
             self._playwright_instance.stop()
     
 
-    
+"""    
 @dataclass(kw_only=True)
 class MFWScraper(Scraper):
-    """
+    
     MFW 爬虫类，继承自 Scraper。
-    """
+    
     # 存储登录状态的文件路径
     file_path: Path | None = field(init=False)
     # Playwright 浏览器上下文
@@ -95,9 +95,9 @@ class MFWScraper(Scraper):
     
 
     def mfw_create_and_login(self) -> None:
-            """
+            
             创建浏览器上下文并处理登录逻辑。
-            """
+            
             if self.file_path is None:
                 print("未指定认证文件路径，使用无状态浏览器登录")
                 self.context = self.browser.new_context()
@@ -122,7 +122,7 @@ class MFWScraper(Scraper):
             self.page.get_by_placeholder("您的密码").fill("Wyb070928")
             self.page.locator(".login_agreement").click()
             self.page.locator("._js_loginBtn").click()
-
+"""
 
 
             

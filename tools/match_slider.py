@@ -170,5 +170,6 @@ def main():
     else:
         print("Failed to load background image for visualization.")
 
+
 if __name__ == "__main__":
     main()
